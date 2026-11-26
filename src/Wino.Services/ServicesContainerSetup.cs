@@ -89,6 +89,7 @@ public static class ServicesContainerSetup
         services.AddTransient<ITaskQueryService>(provider => provider.GetRequiredService<ITaskService>());
         services.AddTransient<ISignatureService, SignatureService>();
         services.AddTransient<IEmailTemplateService, EmailTemplateService>();
+        services.AddSingleton<IEmailTemplateRenderer, ScribanEmailTemplateRenderer>();
         services.AddTransient<IContextMenuItemService, ContextMenuItemService>();
         services.AddSingleton<IKnownImapProviderCatalogLoader, KnownImapProviderCatalogLoader>();
         services.AddSingleton<IKnownImapProviderCatalog, EmbeddedKnownImapProviderCatalog>();

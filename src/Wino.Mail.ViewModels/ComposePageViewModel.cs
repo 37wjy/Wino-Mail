@@ -211,6 +211,7 @@ public partial class ComposePageViewModel : MailBaseViewModel,
     private readonly IFolderService _folderService;
     private readonly IAccountService _accountService;
     private readonly IEmailTemplateService _emailTemplateService;
+    private readonly IEmailTemplateRenderer _emailTemplateRenderer;
     private readonly IWinoRequestDelegator _worker;
     private readonly WinoRequestCoordinator _requestCoordinator;
     public readonly IPreferencesService PreferencesService;
@@ -237,6 +238,7 @@ public partial class ComposePageViewModel : MailBaseViewModel,
                                 IFolderService folderService,
                                 IAccountService accountService,
                                 IEmailTemplateService emailTemplateService,
+                                IEmailTemplateRenderer emailTemplateRenderer,
                                 IWinoRequestDelegator worker,
                                 WinoRequestCoordinator requestCoordinator,
                                 IContactService contactService,
@@ -268,6 +270,7 @@ public partial class ComposePageViewModel : MailBaseViewModel,
         _fileService = fileService;
         _accountService = accountService;
         _emailTemplateService = emailTemplateService;
+        _emailTemplateRenderer = emailTemplateRenderer;
         _worker = worker;
         _requestCoordinator = requestCoordinator;
         _smimeCertificateService = smimeCertificateService;

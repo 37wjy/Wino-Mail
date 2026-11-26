@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +10,9 @@ using Serilog;
 using Wino.Core.Domain;
 using Wino.Core.Domain.Entities.Mail;
 using Wino.Core.Domain.Entities.Shared;
+using Wino.Core.Domain.Enums;
 using Wino.Core.Domain.Interfaces;
+using Wino.Core.Domain.Models.Mail;
 using Wino.Core.Domain.Validation;
 
 namespace Wino.Mail.ViewModels;
@@ -120,13 +123,26 @@ public partial class ComposePageViewModel
     /// <summary>
     /// Replaces the body through <paramref name="renderHtmlAsync"/>, applies the bound signature
     /// (or re-applies the current one), then fills subject and To when those fields are still empty.
+    /// Subject and HTML run through Scriban with the composing account context before they are applied.
     /// </summary>
     public async Task ApplyTemplateAsync(EmailTemplate template, Func<string, Task> renderHtmlAsync)
     {
         if (template == null || renderHtmlAsync == null)
             return;
 
-        await renderHtmlAsync(template.HtmlContent ?? string.Empty).ConfigureAwait(false);
+        var context = BuildEmailTemplateRenderContext();
+        var bodyResult = _emailTemplateRenderer.Expand(template.HtmlContent, context);
+        var subjectResult = string.IsNullOrWhiteSpace(template.Subject)
+            ? EmailTemplateExpandResult.Success(template.Subject ?? string.Empty)
+            : _emailTemplateRenderer.Expand(template.Subject, context);
+
+        if (!bodyResult.Succeeded || !subjectResult.Succeeded)
+        {
+            var error = !bodyResult.Succeeded ? bodyResult.ErrorMessage : subjectResult.ErrorMessage;
+            NotifyTemplateMacroError(error);
+        }
+
+        await renderHtmlAsync(bodyResult.Text).ConfigureAwait(false);
 
         await ExecuteUIThreadAsync(async () =>
         {
@@ -139,7 +155,7 @@ public partial class ComposePageViewModel
             else
                 await ReapplySignatureAsync();
 
-            ApplyTemplateSubject(template);
+            ApplyTemplateSubject(subjectResult.Text);
             ApplyTemplateToRecipients(template);
         }).ConfigureAwait(false);
     }
@@ -152,7 +168,69 @@ public partial class ComposePageViewModel
     {
         if (template == null || string.IsNullOrWhiteSpace(template.Subject) || !string.IsNullOrWhiteSpace(Subject)) return;
 
-        Subject = template.Subject;
+        var result = _emailTemplateRenderer.Expand(template.Subject, BuildEmailTemplateRenderContext());
+        if (!result.Succeeded)
+            NotifyTemplateMacroError(result.ErrorMessage);
+
+        ApplyTemplateSubject(result.Text);
+    }
+
+    private void NotifyTemplateMacroError(string error)
+    {
+        var message = string.IsNullOrWhiteSpace(error)
+            ? Translator.Composer_TemplateMacroErrorMessage
+            : Translator.Composer_TemplateMacroErrorMessage + " " + error;
+        _dialogService.InfoBarMessage(Translator.Composer_TemplateMacroErrorTitle, message, InfoBarMessageType.Warning);
+    }
+
+    private void ApplyTemplateSubject(string expandedSubject)
+    {
+        if (string.IsNullOrWhiteSpace(expandedSubject) || !string.IsNullOrWhiteSpace(Subject)) return;
+
+        Subject = expandedSubject;
+    }
+
+    private EmailTemplateRenderContext BuildEmailTemplateRenderContext()
+    {
+        var account = ComposingAccount;
+        var alias = SelectedAlias;
+        var fromName = !string.IsNullOrWhiteSpace(alias?.AliasSenderName)
+            ? alias.AliasSenderName
+            : account?.SenderName ?? account?.Name ?? string.Empty;
+        var fromAddress = !string.IsNullOrWhiteSpace(alias?.AliasAddress)
+            ? alias.AliasAddress
+            : account?.Address ?? string.Empty;
+
+        return new EmailTemplateRenderContext
+        {
+            AccountName = account?.SenderName ?? account?.Name ?? string.Empty,
+            AccountAddress = account?.Address ?? string.Empty,
+            FromName = fromName,
+            FromAddress = fromAddress,
+            To = MapRecipients(ToItems),
+            Cc = MapRecipients(CCItems),
+            Bcc = MapRecipients(BCCItems),
+            FirstDayOfWeek = PreferencesService.FirstDayOfWeek,
+            Now = DateTime.Now,
+        };
+    }
+
+    private static List<EmailTemplateRecipientModel> MapRecipients(IEnumerable<AccountContact> contacts)
+    {
+        var list = new List<EmailTemplateRecipientModel>();
+        if (contacts == null)
+            return list;
+
+        foreach (var contact in contacts)
+        {
+            list.Add(new EmailTemplateRecipientModel
+            {
+                Name = contact.Name ?? string.Empty,
+                Address = contact.Address ?? string.Empty,
+            });
+        }
+
+        return list;
     }
 
     /// <summary>

@@ -25,6 +25,7 @@
 		<PackageReference Include="Ical.Net" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Logging" />
+		<PackageReference Include="Scriban" />
 		<PackageReference Include="Sentry.Serilog" />
 		<PackageReference Include="Serilog" />
 		<PackageReference Include="Serilog.Sinks.Debug" />
